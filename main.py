@@ -1,50 +1,45 @@
 import streamlit as st
 from streamlit_gsheets import GSheetsConnection
+import pandas as pd
 
-# Configuración de marca
-st.set_page_config(page_title="GoPolitics | Control de Asignaciones", layout="wide")
-
-st.markdown("""
-    <style>
-    h1, h2, h3 { color: #002366; font-family: 'Montserrat', sans-serif; }
-    .stButton>button { 
-        background-color: #CC0000; 
-        color: white; 
-        border-radius: 10px; 
-    }
-    </style>
-    """, unsafe_allow_html=True)
+st.set_page_config(page_title="GoPolitics Control", layout="wide")
 
 st.title("📊 Panel de Control de Asignaciones")
 
-# Conexión con la hoja
+# Conexión
 conn = st.connection("gsheets", type=GSheetsConnection)
-URL_SHEET = "https://docs.google.com/spreadsheets/d/1jsKCk1FO9MCNtwdT2C56EWQVTQDI5akF7hCX0njGkCc/edit?usp=sharing" # Reemplazaremos esto en la Fase 4
-df = conn.read(spreadsheet=URL_SHEET, ttl=0)
+URL_SHEET = st.secrets["connections"]["gsheets"]["spreadsheet"]
 
-def marcar_hecho(index):
-    df.at[index, 'Status'] = 'Realizada'
-    conn.update(spreadsheet=URL_SHEET, data=df)
-    st.rerun()
+# Forzamos la lectura fresca (ttl=0)
+try:
+    df = conn.read(spreadsheet=URL_SHEET, ttl=0)
+    
+    # Limpiamos espacios en blanco en los nombres de las columnas por si acaso
+    df.columns = df.columns.str.strip()
 
-# Filtrado por tus columnas reales
-sections = df['Section'].unique()
-cols = st.columns(len(sections))
-
-for i, sec in enumerate(sections):
-    with cols[i]:
-        st.subheader(f"📂 {sec}")
-        # Filtro de pendientes para este segmento
-        pendientes = df[(df['Section'] == sec) & (df['Status'] == 'Pendiente')]
+    if 'Status' not in df.columns:
+        st.error(f"Error: No encontré la columna 'Status'. Columnas detectadas: {list(df.columns)}")
+    else:
+        # Poner todo en una lista vertical para que se vea mejor (ya que tienes muchas secciones)
+        sections = df['Section'].unique()
         
-        for idx, row in pendientes.iterrows():
-            with st.expander(f"📌 {row['Assignment']}"):
-                st.write(f"**Responsable:** {row['Owner']}")
-                st.write(f"**Notas:** {row['Notes']}")
-                if st.button("Marcar como Realizada", key=f"btn_{idx}"):
-                    marcar_hecho(idx)
+        for sec in sections:
+            st.markdown(f"### 📂 {sec}")
+            # Filtramos ignorando mayúsculas/minúsculas en el contenido de la celda
+            pendientes = df[(df['Section'] == sec) & (df['Status'].str.strip() == 'Pendiente')]
+            
+            if pendientes.empty:
+                st.info(f"Sin pendientes en {sec}")
+            else:
+                for idx, row in pendientes.iterrows():
+                    col_t, col_b = st.columns([4, 1])
+                    col_t.write(f"**{row['Assignment']}** ({row['Owner']})")
+                    if col_b.button("Hecho", key=f"btn_{idx}"):
+                        df.at[idx, 'Status'] = 'Realizada'
+                        conn.update(spreadsheet=URL_SHEET, data=df)
+                        st.success("¡Actualizado!")
+                        st.rerun()
+            st.divider()
 
-        st.divider()
-        # Historial
-        realizadas = df[(df['Section'] == sec) & (df['Status'] == 'Realizada')]
-        st.caption(f"Terminadas: {len(realizadas)}")
+except Exception as e:
+    st.error(f"Hubo un problema al conectar: {e}")
