@@ -19,7 +19,7 @@ st.title("📊 Panel de Control de Asignaciones")
 
 # Conexión con la hoja
 conn = st.connection("gsheets", type=GSheetsConnection)
-URL_SHEET = "TU_URL_DE_GOOGLE_SHEETS_AQUÍ" # Reemplazaremos esto en la Fase 4
+URL_SHEET = "https://docs.google.com/spreadsheets/d/1jsKCk1FO9MCNtwdT2C56EWQVTQDI5akF7hCX0njGkCc/edit?usp=sharing" # Reemplazaremos esto en la Fase 4
 df = conn.read(spreadsheet=URL_SHEET, ttl=0)
 
 def marcar_hecho(index):
