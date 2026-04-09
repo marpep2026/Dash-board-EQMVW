@@ -1,100 +1,152 @@
 import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
+from datetime import datetime
 
-# Configuración de página con estética GoPolitics
-st.set_page_config(page_title="GoPolitics Dashboard", layout="centered")
+# 1. CONFIGURACIÓN DE PÁGINA
+st.set_page_config(page_title="EQ Dashboard - Moraine Valley", layout="centered")
 
+# 2. ESTILOS CSS PERSONALIZADOS (Estética limpia, Azul Institucional)
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@700&family=Roboto&display=swap');
-    h1, h2, h3 { font-family: 'Montserrat', sans-serif; color: #002366; }
+    /* Importar fuentes limpias y formales */
+    @import url('https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital@0;1&family=Open+Sans:wght@400;600&display=swap');
     
-    /* Botón 'Mark as Done' en Rojo Intenso */
-    .stButton>button { 
-        background-color: #CC0000; 
-        color: white; 
-        border-radius: 8px; 
-        width: 100%;
-        height: 3em;
-        border: none;
-        font-weight: bold;
-        font-size: 16px;
+    /* Forzar fondo claro general */
+    .stApp {
+        background-color: #F8F9FA;
+        color: #2b2b2b;
+        font-family: 'Open Sans', sans-serif;
     }
-    .stButton>button:hover { background-color: #8B0000; color: white; border: 1px solid white; }
     
-    /* Tag de Owner */
+    /* Títulos con fuente más tradicional */
+    h1, h2, h3 { 
+        font-family: 'Libre Baskerville', serif; 
+        color: #003366; /* Azul Marino Institucional */
+    }
+    
+    /* Botón 'Mark as Done' */
+    .stButton>button { 
+        background-color: #0056b3; /* Azul sereno */
+        color: white; 
+        border-radius: 6px; 
+        width: 100%;
+        height: 2.8em;
+        border: none;
+        font-weight: 600;
+        font-size: 15px;
+        transition: all 0.3s ease;
+    }
+    .stButton>button:hover { 
+        background-color: #004085; /* Azul más oscuro al pasar el mouse */
+        color: white; 
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    
+    /* Etiqueta del Responsable (Owner) */
     .owner-label {
-        color: #CC0000;
-        font-weight: bold;
-        font-size: 0.85rem;
-        margin-bottom: -10px;
+        color: #4a5568;
+        background-color: #e2e8f0;
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-weight: 600;
+        font-size: 0.75rem;
+        display: inline-block;
+        margin-bottom: 8px;
+    }
+    
+    /* Contenedor de la frase motivacional */
+    .quote-box {
+        font-family: 'Libre Baskerville', serif;
+        font-style: italic;
+        color: #2c3e50;
+        background-color: #ffffff;
+        padding: 20px;
+        border-left: 5px solid #003366;
+        margin-bottom: 25px;
+        border-radius: 0 8px 8px 0;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
     }
     </style>
     """, unsafe_allow_html=True)
 
-st.title("📊 Assignment Dashboard")
+# 3. ENCABEZADO Y TÍTULO
+st.title("Moraine Valley Ward")
+st.subheader("Elders Quorum Presidency Dashboard")
 
-# Conexión Segura con Service Account
+# --- AQUÍ VA TU FRASE MOTIVACIONAL ---
+# Puedes cambiar el texto entre las comillas triples por la escritura o cita que desees.
+st.markdown("""
+<div class='quote-box'>
+    "Por tanto, no os canséis de hacer lo bueno, porque estáis poniendo los cimientos de una gran obra. Y de las cosas pequeñas proceden las grandes."<br>
+    <strong>— Doctrina y Convenios 64:33</strong>
+</div>
+""", unsafe_allow_html=True)
+
+# 4. FECHA Y HORA ACTUAL
+fecha_actual = datetime.now().strftime("%A, %B %d, %Y")
+hora_actual = datetime.now().strftime("%I:%M %p")
+st.caption(f"📅 **Today:** {fecha_actual} | 🔄 **Last Data Sync:** {hora_actual}")
+st.divider()
+
+# 5. CONEXIÓN A DATOS
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 try:
-    # Leer datos con caché de 5 segundos (Optimizado para no saturar la API de Google)
+    # Leer datos con caché
     df = conn.read(ttl=5)
     
     # Limpieza de datos preventiva
     df.columns = df.columns.str.strip()
     df['Status'] = df['Status'].astype(str).str.strip()
 
-    # SOLUCIÓN COLUMNA NOTES: Si no existe en el Google Sheet, la creamos en memoria vacía
     if 'Notes' not in df.columns:
         df['Notes'] = None
 
-    # --- SECCIÓN SUPERIOR: COMPLETED TASKS (BOTÓN VERDE EXPANDIBLE) ---
+    # --- TAREAS COMPLETADAS ---
     done_tasks = df[df['Status'] == 'Done']
     
-    with st.expander(f"🟢 SHOW COMPLETED TASKS ({len(done_tasks)})", expanded=False):
+    with st.expander(f"✅ SHOW COMPLETED TASKS ({len(done_tasks)})", expanded=False):
         if done_tasks.empty:
             st.write("No tasks completed yet.")
         else:
             for _, row in done_tasks.tail(20).iterrows():
-                st.write(f"✅ **{row['Assignment']}** | {row['Owner']} ({row['Section']})")
+                st.write(f"✔️ **{row['Assignment']}** | {row['Owner']} ({row['Section']})")
 
     st.divider()
 
-    # --- SECCIÓN MEDIA: PENDING TASKS POR CATEGORÍA ---
-    # Obtenemos las secciones únicas ignorando valores nulos
+    # --- TAREAS PENDIENTES ---
     sections = df['Section'].dropna().unique()
 
     for sec in sections:
         pending = df[(df['Section'] == sec) & (df['Status'] == 'Pending')]
         
         if not pending.empty:
-            st.markdown(f"### 📂 {sec}")
+            st.markdown(f"### 📁 {sec}")
             
             for idx, row in pending.iterrows():
+                # Diseño de tarjeta para cada tarea
                 with st.container():
-                    c1, c2 = st.columns([3, 1.2])
+                    c1, c2 = st.columns([3, 1])
                     
                     with c1:
-                        st.markdown(f"<div class='owner-label'>{row['Owner']}</div>", unsafe_allow_html=True)
+                        st.markdown(f"<div class='owner-label'>👤 {row['Owner']}</div>", unsafe_allow_html=True)
                         st.write(f"**{row['Assignment']}**")
                         
-                        # Mostrar nota solo si existe y tiene texto
                         nota = row['Notes']
                         if pd.notna(nota) and str(nota).strip() != "":
-                            st.caption(f"Note: {nota}")
+                            st.caption(f"📝 {nota}")
                     
                     with c2:
-                        # Acción: Actualizar Status a 'Done'
+                        st.write("") # Espaciador para centrar el botón verticalmente
                         if st.button("Mark as Done", key=f"btn_{idx}"):
                             df.at[idx, 'Status'] = 'Done'
                             conn.update(data=df)
-                            st.balloons()
+                            st.toast("Task marked as Done! 🎉") # Mensaje flotante en lugar de globos gigantes
                             st.rerun()
-            st.divider()
+            
+            st.markdown("<hr style='margin-top: 10px; margin-bottom: 20px; opacity: 0.2;'>", unsafe_allow_html=True)
 
 except Exception as e:
-    st.error("Error al conectar o leer los datos. Revisa la configuración de tus secretos y permisos.")
-    st.exception(e) # Esto mostrará el error exacto en pantalla para ayudarte a depurar
-    st.info("Asegúrate de que el email de tu Service Account tenga permisos de 'Editor' en tu Google Sheet.")
+    st.error("Error al conectar o leer los datos. Revisa tu conexión.")
+    st.exception(e)
