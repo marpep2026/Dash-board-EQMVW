@@ -2,151 +2,132 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime
+import pytz
 
 # 1. CONFIGURACIÓN DE PÁGINA
-st.set_page_config(page_title="EQ Dashboard - Moraine Valley", layout="centered")
+st.set_page_config(page_title="EQ Presidency - Moraine Valley", layout="centered")
 
-# 2. ESTILOS CSS PERSONALIZADOS (Estética limpia, Azul Institucional)
+# 2. ESTILOS CSS PROFESIONALES
 st.markdown("""
     <style>
-    /* Importar fuentes limpias y formales */
-    @import url('https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital@0;1&family=Open+Sans:wght@400;600&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital@0;1&family=Inter:wght@400;600&display=swap');
     
-    /* Forzar fondo claro general */
-    .stApp {
-        background-color: #F8F9FA;
-        color: #2b2b2b;
-        font-family: 'Open Sans', sans-serif;
+    .stApp { background-color: #F4F7F9; color: #1E1E1E; font-family: 'Inter', sans-serif; }
+    h1, h2, h3 { font-family: 'Libre Baskerville', serif; color: #002E5D; }
+    
+    /* Tarjeta de Tarea */
+    .task-card {
+        background-color: #ffffff;
+        padding: 15px;
+        border-radius: 10px;
+        border: 1px solid #E0E4E8;
+        margin-bottom: 10px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
     }
     
-    /* Títulos con fuente más tradicional */
-    h1, h2, h3 { 
-        font-family: 'Libre Baskerville', serif; 
-        color: #003366; /* Azul Marino Institucional */
+    /* Badge de Sección */
+    .section-badge {
+        font-size: 10px;
+        text-transform: uppercase;
+        color: #002E5D;
+        background-color: #E7F0F7;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-weight: bold;
     }
-    
-    /* Botón 'Mark as Done' */
-    .stButton>button { 
-        background-color: #0056b3; /* Azul sereno */
-        color: white; 
-        border-radius: 6px; 
-        width: 100%;
-        height: 2.8em;
-        border: none;
-        font-weight: 600;
-        font-size: 15px;
-        transition: all 0.3s ease;
-    }
-    .stButton>button:hover { 
-        background-color: #004085; /* Azul más oscuro al pasar el mouse */
-        color: white; 
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-    }
-    
-    /* Etiqueta del Responsable (Owner) */
-    .owner-label {
-        color: #4a5568;
-        background-color: #e2e8f0;
-        padding: 4px 10px;
-        border-radius: 12px;
-        font-weight: 600;
-        font-size: 0.75rem;
-        display: inline-block;
-        margin-bottom: 8px;
-    }
-    
-    /* Contenedor de la frase motivacional */
-    .quote-box {
+
+    /* Frase Inspiracional */
+    .quote-container {
         font-family: 'Libre Baskerville', serif;
         font-style: italic;
-        color: #2c3e50;
-        background-color: #ffffff;
-        padding: 20px;
-        border-left: 5px solid #003366;
-        margin-bottom: 25px;
+        border-left: 4px solid #002E5D;
+        padding: 15px 25px;
+        background-color: white;
+        margin: 20px 0;
         border-radius: 0 8px 8px 0;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
     }
     </style>
     """, unsafe_allow_html=True)
 
-# 3. ENCABEZADO Y TÍTULO
-st.title("Moraine Valley Ward")
-st.subheader("Elders Quorum Presidency Dashboard")
+# 3. MANEJO DE HORA (ZONA HORARIA CHICAGO)
+chicago_tz = pytz.timezone('America/Chicago')
+now_chicago = datetime.now(chicago_tz)
+fecha_display = now_chicago.strftime("%d de %B, %Y")
+hora_display = now_chicago.strftime("%I:%M %p")
 
-# --- AQUÍ VA TU FRASE MOTIVACIONAL ---
-# Puedes cambiar el texto entre las comillas triples por la escritura o cita que desees.
-st.markdown("""
-<div class='quote-box'>
+# 4. ENCABEZADO
+st.title("Moraine Valley Ward")
+st.markdown("### Elders Quorum Presidency Action Plan")
+
+st.markdown(f"""
+<div class='quote-container'>
     "Por tanto, no os canséis de hacer lo bueno, porque estáis poniendo los cimientos de una gran obra. Y de las cosas pequeñas proceden las grandes."<br>
-    <strong>— Doctrina y Convenios 64:33</strong>
+    <span style='font-size: 0.9em; font-weight: bold; font-style: normal;'>— Doctrina y Convenios 64:33</span>
 </div>
 """, unsafe_allow_html=True)
 
-# 4. FECHA Y HORA ACTUAL
-fecha_actual = datetime.now().strftime("%A, %B %d, %Y")
-hora_actual = datetime.now().strftime("%I:%M %p")
-st.caption(f"📅 **Today:** {fecha_actual} | 🔄 **Last Data Sync:** {hora_actual}")
-st.divider()
+st.caption(f"📍 **Chicago Time:** {fecha_display} | 🔄 **Sync:** {hora_display}")
 
 # 5. CONEXIÓN A DATOS
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 try:
-    # Leer datos con caché
-    df = conn.read(ttl=5)
-    
-    # Limpieza de datos preventiva
+    # Leer datos sin caché para pruebas, o ttl corto
+    df = conn.read(ttl=2)
     df.columns = df.columns.str.strip()
     df['Status'] = df['Status'].astype(str).str.strip()
+    if 'Notes' not in df.columns: df['Notes'] = ""
 
-    if 'Notes' not in df.columns:
-        df['Notes'] = None
+    # --- FILTRO DE TAREAS ---
+    pending_df = df[df['Status'] == 'Pending']
+    done_df = df[df['Status'] == 'Done']
 
-    # --- TAREAS COMPLETADAS ---
-    done_tasks = df[df['Status'] == 'Done']
+    # --- PESTAÑAS POR NOMBRE (OWNER) ---
+    st.markdown("#### 📋 Tareas por Responsable")
     
-    with st.expander(f"✅ SHOW COMPLETED TASKS ({len(done_tasks)})", expanded=False):
-        if done_tasks.empty:
-            st.write("No tasks completed yet.")
-        else:
-            for _, row in done_tasks.tail(20).iterrows():
-                st.write(f"✔️ **{row['Assignment']}** | {row['Owner']} ({row['Section']})")
-
-    st.divider()
-
-    # --- TAREAS PENDIENTES ---
-    sections = df['Section'].dropna().unique()
-
-    for sec in sections:
-        pending = df[(df['Section'] == sec) & (df['Status'] == 'Pending')]
+    # Obtenemos los nombres únicos de quienes tienen tareas pendientes
+    owners = sorted(pending_df['Owner'].dropna().unique())
+    
+    if not owners:
+        st.success("¡Excelente trabajo! No hay tareas pendientes.")
+    else:
+        # Creamos una pestaña para cada hermano
+        tabs = st.tabs(owners)
         
-        if not pending.empty:
-            st.markdown(f"### 📁 {sec}")
-            
-            for idx, row in pending.iterrows():
-                # Diseño de tarjeta para cada tarea
-                with st.container():
-                    c1, c2 = st.columns([3, 1])
-                    
-                    with c1:
-                        st.markdown(f"<div class='owner-label'>👤 {row['Owner']}</div>", unsafe_allow_html=True)
-                        st.write(f"**{row['Assignment']}**")
+        for i, owner in enumerate(owners):
+            with tabs[i]:
+                person_tasks = pending_df[pending_df['Owner'] == owner]
+                
+                for idx, row in person_tasks.iterrows():
+                    # Contenedor visual de "Tarjeta"
+                    with st.container():
+                        col_text, col_btn = st.columns([4, 1])
                         
-                        nota = row['Notes']
-                        if pd.notna(nota) and str(nota).strip() != "":
-                            st.caption(f"📝 {nota}")
-                    
-                    with c2:
-                        st.write("") # Espaciador para centrar el botón verticalmente
-                        if st.button("Mark as Done", key=f"btn_{idx}"):
-                            df.at[idx, 'Status'] = 'Done'
-                            conn.update(data=df)
-                            st.toast("Task marked as Done! 🎉") # Mensaje flotante en lugar de globos gigantes
-                            st.rerun()
-            
-            st.markdown("<hr style='margin-top: 10px; margin-bottom: 20px; opacity: 0.2;'>", unsafe_allow_html=True)
+                        with col_text:
+                            st.markdown(f"<span class='section-badge'>{row['Section']}</span>", unsafe_allow_html=True)
+                            st.markdown(f"**{row['Assignment']}**")
+                            if row['Notes']:
+                                st.caption(f"📝 {row['Notes']}")
+                        
+                        with col_btn:
+                            # Botón optimizado
+                            st.write("") # Espaciador
+                            if st.button("Finalizar", key=f"done_{idx}", use_container_width=True):
+                                df.at[idx, 'Status'] = 'Done'
+                                conn.update(data=df)
+                                st.toast(f"Tarea de {owner} completada", icon="✅")
+                                st.rerun()
+                    st.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True)
+
+    # --- HISTORIAL (DENTRO DE UN EXPANDER PARA NO ESTORBAR) ---
+    st.divider()
+    with st.expander(f"📚 Ver Historial de Completadas ({len(done_df)})"):
+        if done_df.empty:
+            st.info("Aún no hay tareas marcadas como listas.")
+        else:
+            # Mostrar tabla simple para el historial
+            st.table(done_df[['Owner', 'Assignment', 'Section']].tail(10))
 
 except Exception as e:
-    st.error("Error al conectar o leer los datos. Revisa tu conexión.")
-    st.exception(e)
+    st.error("Error al cargar los datos.")
+    st.info("Asegúrate de que la hoja de Google Sheets tenga las columnas: Section, Owner, Assignment, Status")
