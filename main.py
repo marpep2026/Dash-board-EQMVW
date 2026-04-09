@@ -39,29 +39,35 @@ st.title("📊 Assignment Dashboard")
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 try:
-    # Leer datos sin caché para ver cambios inmediatos
-    df = conn.read(ttl=0)
+    # Leer datos con caché de 5 segundos (Optimizado para no saturar la API de Google)
+    df = conn.read(ttl=5)
+    
+    # Limpieza de datos preventiva
     df.columns = df.columns.str.strip()
+    df['Status'] = df['Status'].astype(str).str.strip()
+
+    # SOLUCIÓN COLUMNA NOTES: Si no existe en el Google Sheet, la creamos en memoria vacía
+    if 'Notes' not in df.columns:
+        df['Notes'] = None
 
     # --- SECCIÓN SUPERIOR: COMPLETED TASKS (BOTÓN VERDE EXPANDIBLE) ---
-    done_tasks = df[df['Status'].str.strip() == 'Done']
+    done_tasks = df[df['Status'] == 'Done']
     
-    # Estética de botón verde para el historial
     with st.expander(f"🟢 SHOW COMPLETED TASKS ({len(done_tasks)})", expanded=False):
         if done_tasks.empty:
             st.write("No tasks completed yet.")
         else:
-            # Mostramos las últimas 20 realizadas
             for _, row in done_tasks.tail(20).iterrows():
                 st.write(f"✅ **{row['Assignment']}** | {row['Owner']} ({row['Section']})")
 
     st.divider()
 
     # --- SECCIÓN MEDIA: PENDING TASKS POR CATEGORÍA ---
-    sections = df['Section'].unique()
+    # Obtenemos las secciones únicas ignorando valores nulos
+    sections = df['Section'].dropna().unique()
 
     for sec in sections:
-        pending = df[(df['Section'] == sec) & (df['Status'].str.strip() == 'Pending')]
+        pending = df[(df['Section'] == sec) & (df['Status'] == 'Pending')]
         
         if not pending.empty:
             st.markdown(f"### 📂 {sec}")
@@ -73,8 +79,11 @@ try:
                     with c1:
                         st.markdown(f"<div class='owner-label'>{row['Owner']}</div>", unsafe_allow_html=True)
                         st.write(f"**{row['Assignment']}**")
-                        if pd.notna(row['Notes']) and str(row['Notes']).strip() != "":
-                            st.caption(f"Note: {row['Notes']}")
+                        
+                        # Mostrar nota solo si existe y tiene texto
+                        nota = row['Notes']
+                        if pd.notna(nota) and str(nota).strip() != "":
+                            st.caption(f"Note: {nota}")
                     
                     with c2:
                         # Acción: Actualizar Status a 'Done'
@@ -86,5 +95,6 @@ try:
             st.divider()
 
 except Exception as e:
-    st.error(f"Waiting for connection or data update... Error: {e}")
-    st.info("Ensure the Service Account email is added as 'Editor' in your Google Sheet.")
+    st.error("Error al conectar o leer los datos. Revisa la configuración de tus secretos y permisos.")
+    st.exception(e) # Esto mostrará el error exacto en pantalla para ayudarte a depurar
+    st.info("Asegúrate de que el email de tu Service Account tenga permisos de 'Editor' en tu Google Sheet.")
